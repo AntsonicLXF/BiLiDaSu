@@ -1,56 +1,215 @@
 <!DOCTYPE html>
 <html lang="en-us">
-  <head>
+<head>
     <meta charset="utf-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Tuanjie WebGL Player | 比利达苏</title>
-    <!-- 网页通用设置 -->
-<meta name="application-name" content="比利达苏">
-<meta name="theme-color" content="#000000">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>比利达苏 · 加载中</title>
 
-<!-- 关键：iOS Safari 专用设置 -->
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="比利达苏">
-<link rel="apple-touch-icon" href="./image/Icon_192.png">
+    <!-- 原有移动端 / PWA 配置，全部保留 -->
+    <meta name="application-name" content="比利达苏">
+    <meta name="theme-color" content="#000000">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="比利达苏">
+    <link rel="apple-touch-icon" href="./image/Icon_192.png">
+    <link rel="manifest" href="./manifest.json">
+    <link rel="apple-touch-startup-image" href="./image/Icon_512.png">
 
-<!-- 关键：关联 Web App Manifest (安卓/Chrome) -->
-<link rel="manifest" href="./manifest.json">
+    <!-- 自定义加载层样式（完全适配 PC / 移动端） -->
+    <style>
+        /* 全局重置，保证加载层覆盖整个视口 */
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;      /* 防止滚动条破坏全屏覆盖 */
+            background: #000;
+        }
 
-<!-- 可选的启动屏图片（iOS） -->
-<link rel="apple-touch-startup-image" href="./image/Icon_512.png">
-  </head>
-  <body style="text-align: center; padding: 0; border: 0; margin: 0;">
-    <canvas id="tuanjie-canvas" width=1080 height=1920 tabindex="-1" style="width: 1080px; height: 1920px; background: #000000"></canvas>
+        /* 自定义全屏加载层 */
+        #custom-loader {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(145deg, #0b0c10 0%, #1a1e26 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;        /* 保证在最上层 */
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            transition: opacity 0.4s ease;
+            color: white;
+        }
+
+        /* 游戏标题 / Logo 区域 */
+        .loader-logo {
+            font-size: 2.8rem;
+            font-weight: 700;
+            letter-spacing: 4px;
+            margin-bottom: 24px;
+            text-shadow: 0 0 20px rgba(0, 200, 255, 0.6);
+            background: linear-gradient(45deg, #a0e7ff, #6cb4ee);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        /* 进度条背景 */
+        .progress-bg {
+            width: min(420px, 70vw);
+            height: 8px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 20px;
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(255,255,255,0.1);
+            margin: 24px 0 16px;
+            overflow: hidden;
+        }
+
+        /* 进度条填充 */
+        .progress-fill {
+            width: 0%;
+            height: 100%;
+            background: linear-gradient(90deg, #4ae0c0, #28a9e0);
+            border-radius: 20px;
+            transition: width 0.2s ease;
+            box-shadow: 0 0 12px #28a9e0;
+        }
+
+        /* 百分比文字 */
+        .progress-percent {
+            font-size: 1.6rem;
+            font-weight: 600;
+            color: #e6f7ff;
+            text-shadow: 0 0 8px #00a8ff;
+            margin-top: 8px;
+        }
+
+        /* 小提示 / 装饰 */
+        .loader-tip {
+            margin-top: 48px;
+            color: rgba(255,255,255,0.5);
+            font-size: 0.9rem;
+            letter-spacing: 2px;
+            max-width: min(560px, 80vw);
+            text-align: center;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            padding-top: 24px;
+        }
+
+        /* Unity Canvas 默认隐藏，加载完成后再显示 */
+        #tuanjie-canvas {
+            width: 1080px;
+            height: 1920px;
+            background: #000000;
+            display: none;         /* 初始隐藏，加载完后显示 */
+        }
+
+        /* 移动端适配（保留原逻辑，并保证加载层也完美适配） */
+        @media (max-width: 768px), (orientation: portrait) {
+            .loader-logo {
+                font-size: 2.2rem;
+            }
+            .progress-bg {
+                width: 70vw;
+            }
+            #tuanjie-canvas {
+                width: 100% !important;
+                height: 100% !important;
+                position: fixed;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- 自定义全屏加载层（显示进度） -->
+    <div id="custom-loader">
+        <div class="loader-logo">比利达苏</div>
+        <div class="progress-bg">
+            <div id="progress-fill" class="progress-fill"></div>
+        </div>
+        <div id="progress-percent" class="progress-percent">0%</div>
+        <div class="loader-tip">✨ 正在喚醒未知世界 · 請稍後 ✨</div>
+    </div>
+
+    <!-- Unity Canvas：初始隐藏，加载完成后 display 会改为 block/fixed -->
+    <canvas id="tuanjie-canvas" width="1080" height="1920" tabindex="-1" style="background: #000000;"></canvas>
+
+    <!-- 团结引擎 WebGL 加载器（保持原文件名不变） -->
     <script src="Build/BiLiDaSu.loader.js"></script>
+
     <script>
-      if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
-        // Mobile device style: fill the whole browser client area with the game canvas:
-        var meta = document.createElement('meta');
-        meta.name = 'viewport';
-        meta.content = 'width=device-width, height=device-height, initial-scale=1.0, user-scalable=no, shrink-to-fit=yes';
-        document.getElementsByTagName('head')[0].appendChild(meta);
+        (function() {
+            "use strict";
 
-        var canvas = document.querySelector("#tuanjie-canvas");
-        canvas.style.width = "100%";
-        canvas.style.height = "100%";
-        canvas.style.position = "fixed";
+            // ----- 1. 获取 DOM 元素 -----
+            var canvas = document.querySelector("#tuanjie-canvas");
+            var loader = document.querySelector("#custom-loader");
+            var progressFill = document.querySelector("#progress-fill");
+            var progressPercent = document.querySelector("#progress-percent");
 
-        document.body.style.textAlign = "left";
-      }
+            // ----- 2. 移动端适配（完全保留原有逻辑，并保证 canvas 尺寸正确）-----
+            if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+                // 动态 viewport 设置（原代码保留）
+                var meta = document.createElement('meta');
+                meta.name = 'viewport';
+                meta.content = 'width=device-width, height=device-height, initial-scale=1.0, user-scalable=no, shrink-to-fit=yes';
+                document.getElementsByTagName('head')[0].appendChild(meta);
 
-      createTuanjieInstance(document.querySelector("#tuanjie-canvas"), {
-        dataUrl: "Build/BiLiDaSu.data",
-        frameworkUrl: "Build/BiLiDaSu.framework.js",
-        codeUrl: "Build/BiLiDaSu.wasm",
-        streamingAssetsUrl: "StreamingAssets",
-        companyName: "比利达苏",
-        productName: "比利达苏",
-        productVersion: "1.3",
-        // matchWebGLToCanvasSize: false, // Uncomment this to separately control WebGL canvas render size and DOM element size.
-        // devicePixelRatio: 1, // Uncomment this to override low DPI rendering on high DPI displays.
-      });
+                // 移动端 canvas 样式：全屏固定
+                canvas.style.width = "100%";
+                canvas.style.height = "100%";
+                canvas.style.position = "fixed";
+                document.body.style.textAlign = "left";
+
+                // 加载层已经用 fixed 全屏，无需额外调整
+            }
+
+            // ----- 3. 配置团结引擎实例 -----
+            var config = {
+                dataUrl: "Build/BiLiDaSu.data",
+                frameworkUrl: "Build/BiLiDaSu.framework.js",
+                codeUrl: "Build/BiLiDaSu.wasm",
+                streamingAssetsUrl: "StreamingAssets",
+                companyName: "比利达苏",
+                productName: "比利达苏",
+                productVersion: "1.3",
+                // 如果你需要精确控制渲染尺寸，可取消注释下面两行
+                // matchWebGLToCanvasSize: false,
+                // devicePixelRatio: 1,
+            };
+
+            // ----- 4. 调用团结引擎加载器，绑定进度回调 -----
+            //    团结引擎的 createTuanjieInstance 完全兼容官方 Promise + onProgress 接口
+            createTuanjieInstance(canvas, config, function(progress) {
+                // progress 范围 0.0 ~ 1.0
+                var percent = Math.round(progress * 100);
+                progressFill.style.width = percent + "%";
+                progressPercent.innerText = percent + "%";
+            }).then(function(instance) {
+                // 加载成功：淡出加载层，显示 canvas
+                loader.style.opacity = "0";
+                setTimeout(function() {
+                    loader.style.display = "none";   // 完全移除加载层
+                }, 400);
+                canvas.style.display = "block";      // 显示游戏画面
+
+                // 如果是移动端，canvas 已经是 fixed 全屏，保持原有样式
+                if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+                    canvas.style.width = "100%";
+                    canvas.style.height = "100%";
+                }
+            }).catch(function(error) {
+                // 加载失败：显示错误信息，便于调试
+                console.error("团结引擎加载失败:", error);
+                loader.innerHTML = '<div style="color:white;text-align:center;">⚠️ 加载失败，请刷新页面重试<br><span style="font-size:14px;opacity:0.7;">' + error.message + '</span></div>';
+            });
+        })();
     </script>
-  </body>
+</body>
 </html>
